@@ -6,7 +6,7 @@ on:
 
 jobs:
 
-  build-and-push:
+  build:
     runs-on: ubuntu-latest
 
     steps:
@@ -29,60 +29,58 @@ jobs:
         run: docker push ${{ secrets.DOCKER_USERNAME }}/frontend:latest
 #CD
 
-deploy:
-    runs-on: ubuntu-latest    
-    needs: build
-    if: always()
+  deploy:
+      runs-on: ubuntu-latest    
+      needs: build
+      steps:
 
-    steps:
+        - name: Checkout
+          uses: actions/checkout@v4
 
-      - name: Checkout
-        uses: actions/checkout@v4
+        - name: Azure Login
+          uses: azure/login@v2
+          with:
+            creds: ${{ secrets.AZURE_CREDENTIALS }}
+        - name: Setup Terraform
+          uses: hashicorp/setup-terraform@v3
+        - name: Terraform Init
+          working-directory: terraform
+          run: terraform init
 
-      - name: Azure Login
-        uses: azure/login@v2
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-      - name: Terraform Init
-        working-directory: terraform
-        run: terraform init
+        - name: Terraform Plan
+          working-directory: terraform
+          run: |
+            terraform plan \
+                -var-file="terraform.tfvars" \
+                -input=false \
+                -out=tfplan
 
-      - name: Terraform Plan
-        working-directory: terraform
-        run: |
-          terraform plan \
-              -var-file="terraform.tfvars" \
-              -input=false \
-              -out=tfplan
+        - name: Terraform Apply
+          working-directory: terraform
+          run: terraform apply -auto-approve tfplan
 
-      - name: Terraform Apply
-        working-directory: terraform
-        run: terraform apply -auto-approve tfplan
+        - name: Setup kubectl
+          uses: azure/setup-kubectl@v4  
 
-      - name: Setup kubectl
-        uses: azure/setup-kubectl@v4  
-
-      - name: Get AKS credentials
-        run: |
-          az aks get-credentials \
-          --resource-group ${{ vars.RG_NAME }} \
-          --name ${{ vars.AKS_NAME }} \
-          --overwrite-existing  
-
-      - name: Wait cluster ready
-        run: |
-            az aks wait \
+        - name: Get AKS credentials
+          run: |
+            az aks get-credentials \
             --resource-group ${{ vars.RG_NAME }} \
             --name ${{ vars.AKS_NAME }} \
-            --created
-      - name: Deploy to Kubernetes
-        run: |
-          kubectl apply -f k8s/namespace.yaml
-          kubectl apply -f k8s/postgres-deployment.yaml
-          kubectl apply -f k8s/postgres-service.yaml
-          kubectl apply -f k8s/backend-deployment.yaml
-          kubectl apply -f k8s/backend-service.yaml
-          kubectl apply -f k8s/frontend-deployment.yaml
-          kubectl apply -f k8s/frontend-service.yaml
+            --overwrite-existing  
+
+        - name: Wait cluster ready
+          run: |
+              az aks wait \
+              --resource-group ${{ vars.RG_NAME }} \
+              --name ${{ vars.AKS_NAME }} \
+              --created
+        - name: Deploy to Kubernetes
+          run: |
+            kubectl apply -f k8s/namespace.yaml
+            kubectl apply -f k8s/postgres-deployment.yaml
+            kubectl apply -f k8s/postgres-service.yaml
+            kubectl apply -f k8s/backend-deployment.yaml
+            kubectl apply -f k8s/backend-service.yaml
+            kubectl apply -f k8s/frontend-deployment.yaml
+            kubectl apply -f k8s/frontend-service.yaml
