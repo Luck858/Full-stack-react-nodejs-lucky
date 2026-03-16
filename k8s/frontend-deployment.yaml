@@ -1,20 +1,37 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-name: frontend
-namespace: devops-app
+  name: frontend
+  namespace: devops-app
 spec:
-replicas: 2
-selector:
-matchLabels:
-app: frontend
-template:
-metadata:
-labels:
-app: frontend
-spec:
-containers:
-- name: frontend
-image: yourdockerhubusername/frontend:latest
-ports:
-- containerPort: 3000
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      containers:
+        - name: frontend
+          image: DOCKER_USERNAME/frontend:latest
+          ports:
+            - containerPort: 80
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 15
+            periodSeconds: 20

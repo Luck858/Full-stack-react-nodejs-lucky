@@ -8,21 +8,23 @@ app.use(cors());
 app.use(bodyParser.json());
 
 const pool = new Pool({
-  host: "host.docker.internal",
-  user: "postgres",
-  password: "postgres",
-  database: "usersdb",
-  port: 5432
+  host:     process.env.DB_HOST     || "localhost",
+  user:     process.env.DB_USER     || "postgres",
+  password: process.env.DB_PASSWORD || "postgres",
+  database: process.env.DB_NAME     || "usersdb",
+  port:     5432,
 });
 
-app.get("/users", async (req, res) => {
+app.get("/health", (_req, res) => res.json({ status: "ok" }));
+
+app.get("/users", async (_req, res) => {
   const result = await pool.query("SELECT * FROM users");
   res.json(result.rows);
 });
 
 app.post("/users", async (req, res) => {
   const { name, email } = req.body;
-  await pool.query("INSERT INTO users(name,email) VALUES($1,$2)", [name,email]);
+  await pool.query("INSERT INTO users(name,email) VALUES($1,$2)", [name, email]);
   res.send("User added");
 });
 

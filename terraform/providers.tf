@@ -1,9 +1,13 @@
-# Configure the Microsoft Azure Provider
-provider "azurerm" {
-  features {
-
+terraform {
+  required_version = ">= 1.3.0"
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
   }
+}
 
-  subscription_id = "f8bbc358-7bcd-4c0b-999d-00f4c11c9ca8"
-
+provider "aws" {
+  region = var.aws_region
 }
