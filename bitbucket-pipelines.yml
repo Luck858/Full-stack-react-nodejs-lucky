@@ -24,7 +24,7 @@ definitions:
           - cd terraform
           - terraform init
           - terraform validate
-          - terraform import azurerm_resource_group.rg /subscriptions/$ARM_SUBSCRIPTION_ID/resourceGroups/devops-rg || true
+          - terraform import azurerm_resource_group.rg /subscriptions/e4b34d00-2343-42f6-a320-fa940a29c8e8/resourceGroups/devops-rg || true
           - terraform plan -input=false -out=tfplan
           - terraform apply -auto-approve tfplan
         after-script:
