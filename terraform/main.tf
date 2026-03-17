@@ -1,3 +1,9 @@
+# Import existing resources into Terraform state
+import {
+  to = azurerm_resource_group.rg
+  id = "/subscriptions/e4b34d00-2343-42f6-a320-fa940a29c8e8/resourceGroups/devops-rg"
+}
+
 # Resource Group
 resource "azurerm_resource_group" "rg" {
   name     = var.resource_group_name
