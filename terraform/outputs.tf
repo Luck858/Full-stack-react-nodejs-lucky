@@ -7,7 +7,8 @@ output "cluster_name" {
 }
 
 output "cluster_endpoint" {
-  value = azurerm_kubernetes_cluster.aks.kube_config[0].host
+  value     = azurerm_kubernetes_cluster.aks.kube_config[0].host
+  sensitive = true
 }
 
 output "kubeconfig_command" {

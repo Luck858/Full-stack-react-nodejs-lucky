@@ -1,8 +1,9 @@
 FROM node:18-alpine AS builder
 WORKDIR /app
-COPY package.json .
-RUN npm install
-COPY . .
+COPY package.json package-lock.json ./
+RUN npm ci
+COPY public ./public
+COPY src ./src
 RUN npm run build
 
 FROM nginx:alpine
