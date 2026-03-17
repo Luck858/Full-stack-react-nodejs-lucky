@@ -10,7 +10,7 @@ env:
 
 jobs:
 
-# ─── CI: Build & Push ────────────────────────────────────────────────────────
+# --- CI: Build & Push --------------------------------------------------------
   build:
     runs-on: ubuntu-latest
     outputs:
@@ -47,7 +47,7 @@ jobs:
             ${{ env.FRONTEND_IMAGE }}:${{ steps.tag.outputs.tag }}
             ${{ env.FRONTEND_IMAGE }}:latest
 
-# ─── CD: Terraform ───────────────────────────────────────────────────────────
+# --- CD: Terraform -----------------------------------------------------------
   terraform:
     runs-on: ubuntu-latest
     needs: build
@@ -75,7 +75,7 @@ jobs:
         working-directory: terraform
         run: terraform apply -auto-approve tfplan
 
-# ─── CD: Deploy to AKS ───────────────────────────────────────────────────────
+# --- CD: Deploy to AKS -------------------------------------------------------
   deploy:
     runs-on: ubuntu-latest
     needs: [build, terraform]
@@ -86,11 +86,20 @@ jobs:
       - name: Set image tag
         run: echo "TAG=${{ needs.build.outputs.tag }}" >> $GITHUB_ENV
 
-      - name: Write kubeconfig from secret
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Get AKS credentials
         run: |
-          mkdir -p $HOME/.kube
-          echo "${{ secrets.KUBE_CONFIG }}" > $HOME/.kube/config
-          chmod 600 $HOME/.kube/config
+          az aks get-credentials \
+            --resource-group devops-rg \
+            --name devops-cluster \
+            --overwrite-existing
 
       - name: Verify cluster connection
         run: kubectl cluster-info
