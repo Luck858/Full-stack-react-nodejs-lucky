@@ -1,6 +1,7 @@
-aws_region         = "us-east-1"
-cluster_name       = "devops-cluster"
-vpc_cidr           = "10.0.0.0/16"
-node_instance_type = "t3.medium"
-node_desired       = 2
-node_max           = 3
+location            = "eastus"
+resource_group_name = "devops-rg"
+cluster_name        = "devops-cluster"
+vnet_cidr           = "10.0.0.0/8"
+subnet_cidr         = "10.240.0.0/16"
+node_vm_size        = "Standard_D2s_v3"
+node_count          = 2

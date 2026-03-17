@@ -1,11 +1,20 @@
+output "resource_group_name" {
+  value = azurerm_resource_group.rg.name
+}
+
 output "cluster_name" {
-  value = aws_eks_cluster.main.name
+  value = azurerm_kubernetes_cluster.aks.name
 }
 
 output "cluster_endpoint" {
-  value = aws_eks_cluster.main.endpoint
+  value = azurerm_kubernetes_cluster.aks.kube_config[0].host
 }
 
 output "kubeconfig_command" {
-  value = "aws eks update-kubeconfig --region ${var.aws_region} --name ${aws_eks_cluster.main.name}"
+  value = "az aks get-credentials --resource-group ${azurerm_resource_group.rg.name} --name ${azurerm_kubernetes_cluster.aks.name}"
+}
+
+output "kube_config_raw" {
+  value     = azurerm_kubernetes_cluster.aks.kube_config_raw
+  sensitive = true
 }

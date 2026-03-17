@@ -1,35 +1,41 @@
-variable "aws_region" {
-  description = "AWS region"
+variable "location" {
+  description = "Azure region"
   type        = string
-  default     = "us-east-1"
+  default     = "eastus"
+}
+
+variable "resource_group_name" {
+  description = "Azure resource group name"
+  type        = string
+  default     = "devops-rg"
 }
 
 variable "cluster_name" {
-  description = "EKS cluster name"
+  description = "AKS cluster name"
   type        = string
   default     = "devops-cluster"
 }
 
-variable "vpc_cidr" {
-  description = "VPC CIDR block"
+variable "vnet_cidr" {
+  description = "VNet address space"
   type        = string
-  default     = "10.0.0.0/16"
+  default     = "10.0.0.0/8"
 }
 
-variable "node_instance_type" {
-  description = "EC2 instance type for worker nodes"
+variable "subnet_cidr" {
+  description = "AKS subnet CIDR"
   type        = string
-  default     = "t3.medium"
+  default     = "10.240.0.0/16"
 }
 
-variable "node_desired" {
-  description = "Desired number of worker nodes"
+variable "node_vm_size" {
+  description = "VM size for AKS worker nodes"
+  type        = string
+  default     = "Standard_D2s_v3"
+}
+
+variable "node_count" {
+  description = "Number of worker nodes"
   type        = number
   default     = 2
-}
-
-variable "node_max" {
-  description = "Maximum number of worker nodes"
-  type        = number
-  default     = 3
 }
