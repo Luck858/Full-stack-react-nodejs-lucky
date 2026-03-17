@@ -5,101 +5,118 @@ on:
     branches: ["main"]
 
 env:
-  REGISTRY: docker.io
-  BACKEND_IMAGE: ${{ secrets.DOCKER_USERNAME }}/backend
+  BACKEND_IMAGE:  ${{ secrets.DOCKER_USERNAME }}/backend
   FRONTEND_IMAGE: ${{ secrets.DOCKER_USERNAME }}/frontend
 
 jobs:
 
-# =========================
-# 🔹 CI - BUILD & PUSH
-# =========================
+# ─── CI: Build & Push ────────────────────────────────────────────────────────
   build:
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      # 🔐 Docker Login
+      - name: Set image tag
+        id: tag
+        run: echo "tag=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      # 🏷️ Generate Image Tag
-      - name: Set Image Tag
-        run: echo "TAG=${GITHUB_SHA::7}" >> $GITHUB_ENV
+      - name: Build & push backend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          push: true
+          tags: |
+            ${{ env.BACKEND_IMAGE }}:${{ steps.tag.outputs.tag }}
+            ${{ env.BACKEND_IMAGE }}:latest
 
-      # 🐳 Build Backend Image
-      - name: Build Backend Image
-        run: |
-          docker build -t $BACKEND_IMAGE:$TAG ./backend
-          docker tag $BACKEND_IMAGE:$TAG $BACKEND_IMAGE:latest
+      - name: Build & push frontend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          push: true
+          tags: |
+            ${{ env.FRONTEND_IMAGE }}:${{ steps.tag.outputs.tag }}
+            ${{ env.FRONTEND_IMAGE }}:latest
 
-      # 🐳 Build Frontend Image
-      - name: Build Frontend Image
-        run: |
-          docker build -t $FRONTEND_IMAGE:$TAG ./frontend
-          docker tag $FRONTEND_IMAGE:$TAG $FRONTEND_IMAGE:latest
-
-      # 📤 Push Images
-      - name: Push Images
-        run: |
-          docker push $BACKEND_IMAGE:$TAG
-          docker push $BACKEND_IMAGE:latest
-          docker push $FRONTEND_IMAGE:$TAG
-          docker push $FRONTEND_IMAGE:latest
-
-# =========================
-# 🔹 CD - INFRA + DEPLOY
-# =========================
-  deploy:
+# ─── CD: Terraform ───────────────────────────────────────────────────────────
+  terraform:
     runs-on: ubuntu-latest
     needs: build
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Azure Login
-        uses: azure/login@v1
+        uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
+        uses: hashicorp/setup-terraform@v3
 
       - name: Terraform Init
+        working-directory: terraform
         run: terraform init
-        working-directory: ./terraform
 
       - name: Terraform Plan
-        run: terraform plan
-        working-directory: ./terraform
+        working-directory: terraform
+        run: terraform plan -input=false -out=tfplan
 
       - name: Terraform Apply
-        run: terraform apply -auto-approve
-        working-directory: ./terraform  
-        
-         
-      # 🏷️ Reuse Image Tag
-      - name: Set Image Tag
-        run: echo "TAG=${GITHUB_SHA::7}" >> $GITHUB_ENV
+        working-directory: terraform
+        run: terraform apply -auto-approve tfplan
 
-      # 🚀 Deploy to Kubernetes
-      - name: Deploy to Kubernetes
+# ─── CD: Deploy to AKS ───────────────────────────────────────────────────────
+  deploy:
+    runs-on: ubuntu-latest
+    needs: [build, terraform]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set image tag
+        run: echo "TAG=${{ needs.build.outputs.tag }}" >> $GITHUB_ENV
+
+      - name: Write kubeconfig from secret
+        run: |
+          mkdir -p $HOME/.kube
+          echo "${{ secrets.KUBE_CONFIG }}" > $HOME/.kube/config
+          chmod 600 $HOME/.kube/config
+
+      - name: Verify cluster connection
+        run: kubectl cluster-info
+
+      - name: Substitute image tags in manifests
+        run: |
+          sed -i "s|DOCKER_USERNAME/backend:latest|$BACKEND_IMAGE:$TAG|g"  k8s/backend-deployment.yaml
+          sed -i "s|DOCKER_USERNAME/frontend:latest|$FRONTEND_IMAGE:$TAG|g" k8s/frontend-deployment.yaml
+
+      - name: Apply Kubernetes manifests
         run: |
           kubectl apply -f k8s/namespace.yaml
+          kubectl apply -f k8s/postgres-configmap.yaml
+          kubectl apply -f k8s/postgres-pvc.yaml
+          kubectl apply -f k8s/postgres-deployment.yaml
+          kubectl apply -f k8s/postgres-service.yaml
+          kubectl apply -f k8s/backend-deployment.yaml
+          kubectl apply -f k8s/backend-service.yaml
+          kubectl apply -f k8s/frontend-deployment.yaml
+          kubectl apply -f k8s/frontend-service.yaml
+          kubectl apply -f k8s/ingress.yaml
 
-          sed -i "s|backend:latest|$BACKEND_IMAGE:$TAG|g" k8s/backend-deployment.yaml
-          sed -i "s|frontend:latest|$FRONTEND_IMAGE:$TAG|g" k8s/frontend-deployment.yaml
-
-          kubectl apply -f k8s/
-
-      # 🔄 Verify rollout
-      - name: Verify Deployment
+      - name: Wait for rollout
         run: |
-          kubectl rollout status deployment/backend
-          kubectl rollout status deployment/frontend
+          kubectl rollout status deployment/backend  -n devops-app --timeout=120s
+          kubectl rollout status deployment/frontend -n devops-app --timeout=120s
+
+      - name: Verify pods
+        run: kubectl get pods -n devops-app
