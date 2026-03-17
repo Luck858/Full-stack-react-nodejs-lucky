@@ -63,39 +63,27 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # 🔐 Azure Login
       - name: Azure Login
-        uses: azure/login@v2
+        uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      # ⚙️ Terraform Setup
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+        uses: hashicorp/setup-terraform@v2
 
       - name: Terraform Init
-        working-directory: terraform
         run: terraform init
+        working-directory: ./terraform
 
       - name: Terraform Plan
-        working-directory: terraform
-        run: |
-          terraform plan \
-            -var-file="terraform.tfvars" \
-            -input=false \
-            -out=tfplan
+        run: terraform plan
+        working-directory: ./terraform
 
       - name: Terraform Apply
-        working-directory: terraform
-        run: terraform apply -auto-approve tfplan
-
-      # ☸️ Set AKS Context
-      - name: Set AKS Context
-        uses: azure/aks-set-context@v4
-        with:
-          resource-group: ${{ vars.RG_NAME }}
-          cluster-name: ${{ vars.AKS_NAME }}
-
+        run: terraform apply -auto-approve
+        working-directory: ./terraform  
+        
+         
       # 🏷️ Reuse Image Tag
       - name: Set Image Tag
         run: echo "TAG=${GITHUB_SHA::7}" >> $GITHUB_ENV
