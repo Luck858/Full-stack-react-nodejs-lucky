@@ -7,14 +7,14 @@ on:
 env:
   BACKEND_IMAGE:  ${{ secrets.DOCKER_USERNAME }}/backend
   FRONTEND_IMAGE: ${{ secrets.DOCKER_USERNAME }}/frontend
+  POSTGRES_IMAGE: ${{ secrets.DOCKER_USERNAME }}/postgres
 
 jobs:
-## build images and push into dockerhub
+
   build:
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.tag.outputs.tag }}
-
     steps:
       - uses: actions/checkout@v4
 
@@ -28,7 +28,7 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Build & push backend
+      - name: Build and push backend
         uses: docker/build-push-action@v5
         with:
           context: ./backend
@@ -37,7 +37,7 @@ jobs:
             ${{ env.BACKEND_IMAGE }}:${{ steps.tag.outputs.tag }}
             ${{ env.BACKEND_IMAGE }}:latest
 
-      - name: Build & push frontend
+      - name: Build and push frontend
         uses: docker/build-push-action@v5
         with:
           context: ./frontend
@@ -46,12 +46,18 @@ jobs:
             ${{ env.FRONTEND_IMAGE }}:${{ steps.tag.outputs.tag }}
             ${{ env.FRONTEND_IMAGE }}:latest
 
- ## build infrastructure(AKS)           
+      - name: Build and push postgres
+        uses: docker/build-push-action@v5
+        with:
+          context: ./database
+          push: true
+          tags: |
+            ${{ env.POSTGRES_IMAGE }}:${{ steps.tag.outputs.tag }}
+            ${{ env.POSTGRES_IMAGE }}:latest
 
   terraform:
     runs-on: ubuntu-latest
     needs: build
-
     steps:
       - uses: actions/checkout@v4
 
@@ -75,11 +81,9 @@ jobs:
         working-directory: terraform
         run: terraform apply -auto-approve tfplan
 
-# deploy into kubernates
   deploy:
     runs-on: ubuntu-latest
     needs: [build, terraform]
-
     steps:
       - uses: actions/checkout@v4
 
@@ -95,11 +99,7 @@ jobs:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: Get AKS credentials
-        run: |
-          az aks get-credentials \
-            --resource-group myRG \
-            --name myAKSCluster \
-            --overwrite-existing
+        run: az aks get-credentials --resource-group devops-rg --name devops-cluster --overwrite-existing
 
       - name: Verify cluster connection
         run: kubectl cluster-info
@@ -108,6 +108,7 @@ jobs:
         run: |
           sed -i "s|DOCKER_USERNAME/backend:latest|$BACKEND_IMAGE:$TAG|g"  k8s/backend-deployment.yaml
           sed -i "s|DOCKER_USERNAME/frontend:latest|$FRONTEND_IMAGE:$TAG|g" k8s/frontend-deployment.yaml
+          sed -i "s|DOCKER_USERNAME/postgres:latest|$POSTGRES_IMAGE:$TAG|g" k8s/postgres-deployment.yaml
 
       - name: Apply Kubernetes manifests
         run: |
@@ -124,8 +125,12 @@ jobs:
 
       - name: Wait for rollout
         run: |
-          kubectl rollout status deployment/backend  -n devops-app --timeout=120s
-          kubectl rollout status deployment/frontend -n devops-app --timeout=120s
+          kubectl rollout status deployment/postgres  -n devops-app --timeout=120s
+          kubectl rollout status deployment/backend   -n devops-app --timeout=120s
+          kubectl rollout status deployment/frontend  -n devops-app --timeout=120s
 
       - name: Verify pods
         run: kubectl get pods -n devops-app
+
+      - name: Verify services
+        run: kubectl get svc -n devops-app
